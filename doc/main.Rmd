@@ -49,6 +49,14 @@ if(!require("e1071")){
   install.packages("e1071")
 }
 
+if(!require("xgboost")){
+  install.packages("xgboost")
+}
+
+if(!require("randomForest")){
+  install.packages("randomForest")
+}
+
 library(R.matlab)
 library(readxl)
 library(dplyr)
@@ -58,6 +66,8 @@ library(caret)
 library(glmnet)
 library(WeightedROC)
 library(e1071)
+library(xgboost)
+library(randomForest)
 ```
 
 ### Step 0 set work directories
@@ -112,6 +122,12 @@ shrinkage = c(0.01,0.05,0.1,0.15)
 #svm parameters tuning:
 cost = c(0.0000001,0.000001,0.00001,0.0001,0.001,0.01,1)
 model_labels_svm = paste("SVM with cost =", cost)
+
+#xgboost parameters tuning
+params <- list(booster = "gbtree", objective = "binary:logistic", 
+                 eta=0.3, gamma=0, max_depth=6, min_child_weight=1, 
+                 subsample=1, colsample_bytree=1)
+
 ```
 
 ### Step 2: import data and train-test split 
@@ -210,11 +226,15 @@ source("../lib/test_gbm.R")
 
 source("../lib/train_SVM.R") 
 source("../lib/test_SVM.R")
+
+source("../lib/fit_train_xgboost.R")
 ```
 
 #### Model selection with cross-validation
 * Do model selection by choosing among different values of training model parameters.
 
+
+* Baseline/GBM
 ```{r runcv}
 feature_train = as.matrix(dat_train[, -6007])
 label_train = as.integer(dat_train$label) 
@@ -277,6 +297,23 @@ if(run.cv.svm){
   load("../output/res_cv_svm.RData")
 }
 ```
+
+
+* XGBoost 
+```{r Parameter Optimization Through Cross Validation for XGBoost}
+
+source("../lib/xgboost_cv.R")
+feature_train = as.matrix(dat_train[, -6007])
+label_train = as.integer(dat_train$label) 
+label_train_xgb <- label_train
+label_train_xgb[label_train_xgb == 2] <- 0
+
+set_rounds  <- 50
+K <- 5
+
+new_params <- cv_xgboost(params, feature_train, label_train_xgb, set_rounds, K)
+
+``` 
 
 ```{r cv result df}
 library(tidyr)
@@ -388,6 +425,16 @@ if (sample.reweight){
 save(fit_train, file="../output/fit_train.RData")
 ```
 
+
+* Train the XGBoost model with optimal parameters
+
+```{r final_train_xgb}
+
+xgb_train_time <- system.time(fit_train_xgb <- xgboost_train(features = feature_train, labels = label_train_xgb, params = new_params, rounds =  set_rounds))
+
+save(fit_train_xgb, file="../output/fit_train_xgb.RData")
+
+```
 ### Step 5: Run test on test images
 ```{r test}
 tm_test = NA
@@ -407,6 +454,19 @@ if(run.test.svm){
   tm_test <- system.time({
     label_pred <- as.integer(svm_test(fit_train, feature_test, pred.type = 'class')); 
     prob_pred <- svm_test(fit_train, feature_test, pred.type = 'response')})
+}
+```
+
+Run test on test images for XGBoost
+```{r test}
+tm_test_xgb = NA
+feature_test <- as.matrix(dat_test[, -6007])
+if(run.test){
+  load(file="../output/fit_train_xgb.RData")
+  tm_test_xgb <- system.time({label_pred_xgb <- predict(fit_train_xgb, feature_test, pred.type = 'class');
+                          label_pred_xgb[label_pred_xgb >= 0.5] <- 1;
+                          label_pred_xgb[label_pred_xgb < 0.5] <-  0;
+                          prob_pred_xgb <- predict(fit_train_xgb, feature_test, pred.type = 'response')})
 }
 ```
 
@@ -446,6 +506,19 @@ cat("The AUC of model:", model_labels_svm[which.min(res_cv_svm$mean_error)], "is
 
 ```
 
+* evaluation of XGB
+```{r}
+
+accu_xgb <- mean((label_pred_xgb == label_test_xgb))
+tpr.fpr_xgb <- WeightedROC(prob_pred_xgb, label_test_xgb)
+auc_xgb <- WeightedAUC(tpr.fpr_xgb)
+
+
+cat("The accuracy of the XGBoost model:", "is", accu_xgb*100, "%.\n")
+cat("The AUC of the XGBoost model:", "is", auc_xgb, ".\n")
+
+```
+
 ### Summarize Running Time
 Prediction performance matters, so does the running times for constructing features and for training the model, especially when the computation resource is limited. 
 ```{r running_time}
@@ -460,6 +533,14 @@ cat("Time for constructing testing features=", tm_feature_test[1], "s \n")
 cat("Time for training model=", tm_train[1], "s \n") 
 cat("Time for testing model=", tm_test[1], "s \n")
 ```
+```{r running_time_XGB}
+cat("Time for constructing training features=", tm_feature_train[1], "s \n")
+cat("Time for constructing testing features=", tm_feature_test[1], "s \n")
+cat("Time for training model=", xgb_train_time[1], "s \n") 
+cat("Time for testing model=", tm_test_xgb[1], "s \n")
+
+```
+
 ###Reference
 - Du, S., Tao, Y., & Martinez, A. M. (2014). Compound facial expressions of emotion. Proceedings of the National Academy of Sciences, 111(15), E1454-E1462.
 
