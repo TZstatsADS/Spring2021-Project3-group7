@@ -83,12 +83,15 @@ In this chunk, we have a set of controls for the evaluation experiments.
 + (T/F) process features for test set
 
 ```{r exp_setup}
-run.cv <- TRUE # run cross-validation on the training set
+run.cv <- FALSE # run cross-validation on the training set
+run.cv.baseline <- TRUE # run cross-validation on the gbm baseline
 sample.reweight <- TRUE # run sample reweighting in model training
 K <- 5  # number of CV folds
 run.feature.train <- TRUE # process features for training set
-run.test <- TRUE # run evaluation on an independent test set
-run.feature.test <- TRUE # process features for test set
+run.test <- FALSE # run evaluation on an independent test set
+run.feature.test <- FALSE # process features for test set
+run.cv.baseline <- TRUE 
+
 ```
 
 Using cross-validation or independent test set evaluation, we compare the performance of models with different specifications. In this Starter Code, we tune parameter lambda (the amount of shrinkage) for logistic regression with LASSO penalty.
@@ -96,6 +99,11 @@ Using cross-validation or independent test set evaluation, we compare the perfor
 ```{r model_setup}
 lmbd = c(1e-3, 5e-3, 1e-2, 5e-2, 1e-1)
 model_labels = paste("LASSO Penalty with lambda =", lmbd)
+
+#gbm parameters tuning:
+n.trees = c(100,200,300,400)
+shrinkage = c(0.01,0.05,0.1,0.15)
+
 ```
 
 ### Step 2: import data and train-test split 
@@ -188,15 +196,52 @@ Call the train model and test model from library.
 ```{r loadlib}
 source("../lib/train.R") 
 source("../lib/test.R")
+
+source("../lib/train_gbm.R")
+source("../lib/test_gbm.R")
 ```
 
 #### Model selection with cross-validation
 * Do model selection by choosing among different values of training model parameters.
 
 ```{r runcv}
-source("../lib/cross_validation.R")
 feature_train = as.matrix(dat_train[, -6007])
 label_train = as.integer(dat_train$label) 
+
+source("../lib/cross_validation.R")
+source("../lib/cv_gbm.R")
+
+if(run.cv.baseline){  
+  
+  mean_error_cv <- matrix(0, nrow = length(n.trees), ncol = length(shrinkage))
+  sd_error_cv <- matrix(0, nrow = length(n.trees), ncol = length(shrinkage))
+  mean_auc_cv <- matrix(0, nrow = length(n.trees), ncol = length(shrinkage))
+  sd_auc_cv <- matrix(0, nrow = length(n.trees), ncol = length(shrinkage))
+
+  for(i in 1:length(n.trees)){
+    cat("n.trees =", n.trees[i],"\n")
+  for(k in 1:length(shrinkage)){
+    cat("shrinkage =", shrinkage[k],"\n")
+    
+res_cv_gbm <- cv_gbm(features = feature_train, labels = label_train, K,  n.trees = n.trees[i],shrinkage = shrinkage[k],reweight = sample.reweight)
+      
+    mean_error_cv[i,k]<-res_cv_gbm[1]
+     sd_error_cv[i,k]<-res_cv_gbm[2]
+      mean_auc_cv[i,k]<-res_cv_gbm[3]
+       sd_auc_cv[i,k]<-res_cv_gbm[4]
+      
+    save(mean_error_cv, file="../output/mean_error_cv.RData")
+    save(sd_error_cv, file="../output/sd_error_cv.RData")
+    save(mean_auc_cv, file="../output/mean_auc_cv.RData")
+    save(sd_auc_cv, file="../output/sd_auc_cv.RData") 
+    }}
+ } else{
+  load("../output/mean_error_cv.RData")
+  load("../output/sd_error_cv.RData")   
+  load("../output/mean_auc_cv.RData")
+  load("../output/sd_auc_cv.RData")
+    }
+
 if(run.cv){
   res_cv <- matrix(0, nrow = length(lmbd), ncol = 4)
   for(i in 1:length(lmbd)){
@@ -209,24 +254,50 @@ if(run.cv){
   load("../output/res_cv.RData")
 }
 ```
+```{r cv result df}
+library(tidyr)
 
+df_mean_error=data.frame(mean_error_cv)%>%
+setNames(shrinkage)%>%
+mutate(n.trees=n.trees)%>%
+gather(shrinkage,mean_error,`0.01`:`0.15`)
+
+df_sd_error=data.frame(sd_error_cv)%>%
+setNames(shrinkage)%>%
+mutate(n.trees=n.trees)%>%
+gather(shrinkage,sd_error,`0.01`:`0.15`)
+
+df_mean_auc=data.frame(mean_auc_cv)%>%
+setNames(shrinkage)%>%
+mutate(n.trees=n.trees)%>%
+gather(shrinkage,mean_auc,`0.01`:`0.15`)
+
+df_sd_auc=data.frame(sd_auc_cv)%>%
+setNames(shrinkage)%>%
+mutate(n.trees=n.trees)%>%
+gather(shrinkage,sd_auc,`0.01`:`0.15`)
+
+res_cv_gbm <- df_mean_error%>%mutate(sd_error=df_sd_error$sd_error,
+                                     mean_auc=df_mean_auc$mean_auc,
+                                     sd_auc=df_sd_auc$sd_auc)
+save(res_cv_gbm,file = "../output/res_cv_gbm.RData")
+```
 Visualize cross-validation results. 
 ```{r cv_vis}
-  
-res_cv <- as.data.frame(res_cv) 
-colnames(res_cv) <- c("mean_error", "sd_error", "mean_AUC", "sd_AUC")
-res_cv$k = as.factor(lmbd)
+load("../output/res_cv_gbm.RData")
 
-if(run.cv){
-  p1 <- res_cv %>% 
-    ggplot(aes(x = as.factor(lmbd), y = mean_error,
-               ymin = mean_error - sd_error, ymax = mean_error + sd_error)) + 
+
+if(run.cv.baseline){
+  p1 <- res_cv_gbm %>% 
+    ggplot(aes(x = n.trees, y = mean_error,
+               ymin = mean_error - sd_error, ymax = mean_error  +sd_error)) + 
     geom_crossbar() +
+    facet_wrap(~shrinkage) +
     theme(axis.text.x = element_text(angle = 90, hjust = 1))
   
-  p2 <- res_cv %>% 
-    ggplot(aes(x = as.factor(lmbd), y = mean_AUC,
-               ymin = mean_AUC - sd_AUC, ymax = mean_AUC + sd_AUC)) + 
+  p2 <- res_cv_gbm %>% 
+    ggplot(aes(x = n.trees, y = mean_auc,
+               ymin = mean_auc - sd_auc, ymax = mean_auc + sd_auc)) +     facet_wrap(~shrinkage) +
     geom_crossbar() +
     theme(axis.text.x = element_text(angle = 90, hjust = 1))
   
@@ -240,7 +311,8 @@ if(run.cv){
 
 * Choose the "best" parameter value
 ```{r best_model}
-par_best <- lmbd[which.min(res_cv$mean_error)] # lmbd[which.max(res_cv$mean_AUC)]
+best_n.trees = as.numeric(res_cv_gbm[which.min(res_cv_gbm$mean_error),1])
+best_shrinkage = as.numeric(res_cv_gbm[which.min(res_cv_gbm$mean_error),2])
 ```
 
 * Train the model with the entire training set using the selected model (model parameter) via cross-validation.
@@ -251,9 +323,9 @@ for (v in unique(label_train)){
   weight_train[label_train == v] = 0.5 * length(label_train) / length(label_train[label_train == v])
 }
 if (sample.reweight){
-  tm_train <- system.time(fit_train <- train(feature_train, label_train, w = weight_train, par_best))
+  tm_train <- system.time(fit_train <- train_gbm(feature_train, label_train, w = weight_train,best_n.trees, best_shrinkage))
 } else {
-  tm_train <- system.time(fit_train <- train(feature_train, label_train, w = NULL, par_best))
+  tm_train <- system.time(fit_train <- train(feature_train, label_train, w = NULL, best_n.trees, best_shrinkage))
 }
 save(fit_train, file="../output/fit_train.RData")
 ```
@@ -264,8 +336,8 @@ tm_test = NA
 feature_test <- as.matrix(dat_test[, -6007])
 if(run.test){
   load(file="../output/fit_train.RData")
-  tm_test <- system.time({label_pred <- as.integer(test(fit_train, feature_test, pred.type = 'class')); 
-                          prob_pred <- test(fit_train, feature_test, pred.type = 'response')})
+  tm_test <- system.time({label_pred <- as.integer(test_gbm(fit_train,feature_test,best_n.trees, best_shrinkage, pred.type = 'link')); 
+                          prob_pred <- test_gbm(fit_train, feature_test,best_n.trees, best_shrinkage, pred.type = 'response')})
 }
 ```
 
@@ -284,8 +356,8 @@ tpr.fpr <- WeightedROC(prob_pred, label_test, weight_test)
 auc <- WeightedAUC(tpr.fpr)
 
 
-cat("The accuracy of model:", model_labels[which.min(res_cv$mean_error)], "is", accu*100, "%.\n")
-cat("The AUC of model:", model_labels[which.min(res_cv$mean_error)], "is", auc, ".\n")
+cat("The accuracy of model GBM: with n.trees=",best_n.trees,"and shrinkage =", best_shrinkage, "is", accu*100, "%.\n")
+cat("The AUC of model GBM: with n.trees=", best_n.trees,"and shrinkage =", best_shrinkage, "is", auc, ".\n")
 
 
 ```
