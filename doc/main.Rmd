@@ -129,6 +129,13 @@ params <- list(booster = "gbtree", objective = "binary:logistic",
                  eta=0.3, gamma=0, max_depth=6, min_child_weight=1, 
                  subsample=1, colsample_bytree=1)
 
+#random forest parameters tuning
+ntrees <- 128 
+#according to a paper by Thais Mayumi Oshiro, Pedro Santoro Perez, and Jos ́e Augusto Baranauska,
+# the AUC gain for increasing number of trees is minimal after 128, 
+# after observing a multitude of their datasets
+
+
 ```
 
 ### Step 2: import data and train-test split 
@@ -229,6 +236,7 @@ source("../lib/train_SVM.R")
 source("../lib/test_SVM.R")
 
 source("../lib/fit_train_xgboost.R")
+source("../lib/fit_train_randomforest.R")
 ```
 
 #### Model selection with cross-validation
@@ -401,6 +409,16 @@ best_shrinkage = as.numeric(res_cv_gbm[which.min(res_cv_gbm$mean_error),2])
 best_cost <- cost[which.min(res_cv_svm$mean_error)]
 ```
 
+* Choose "best" number of trees and mtry for random forest model
+```{r best_model_rf}
+source("../lib/rf_param_choice.R")
+feature_train = as.matrix(dat_train[, -6007])
+label_train = as.integer(dat_train$label) 
+init_mtry <- sqrt(ncol(dat_train))
+
+rf_opt_tree <- param_choice_rf(feature_train = feature_train, label_train =  label_train, mtry = init_mtry, ntree = ntrees)
+```
+
 * Train the baseline model with the entire training set using the selected model (model parameter) via cross-validation.
 ```{r final_train_baseline}
 # training weights
@@ -440,6 +458,14 @@ xgb_train_time <- system.time(fit_train_xgb <- xgboost_train(features = feature_
 save(fit_train_xgb, file="../output/fit_train_xgb.RData")
 
 ```
+
+* Train the Random Forest model with optimal parameters
+
+```{r final_train_rf}
+rf_train_time <- system.time(fit_train_randomforest <- rf_train(feature_train = feature_train, label_train = label_train, mtry = rf_opt_tree$mtry, ntree = rf_opt_tree$ntree))
+save(fit_train_rf, file="../output/fit_train_rf.RData")
+```
+
 ### Step 5: Run test on test images
 ```{r test gbm}
 tm_test_baseline = NA
@@ -463,7 +489,7 @@ if(run.test.svm){
 ```
 
 Run test on test images for XGBoost
-```{r test}
+```{r test xgboost}
 tm_test_xgb = NA
 feature_test <- as.matrix(dat_test[, -6007])
 if(run.test){
@@ -474,7 +500,17 @@ if(run.test){
                           prob_pred_xgb <- predict(fit_train_xgb, feature_test, pred.type = 'response')})
 }
 ```
+Run test images for Random Forest
+```{r test random forest }
+tm_test_rf = NA
+feature_test <- as.matrix(dat_test[, -6007])
+if(run.test){
+  load(file="../output/fit_train_xgb.RData")
+  tm_test_rf <- system.time({label_pred_rf <- predict(fit_train_rf, feature_test, pred.type = 'class');
+                          prob_pred_rf <- predict(fit_train_rf, feature_test, pred.type = 'prob')})
+} 
 
+```
 
 * evaluation
 ```{r baseline}
@@ -512,8 +548,7 @@ cat("The AUC of model:", model_labels_svm[which.min(res_cv_svm$mean_error)], "is
 
 ```
 
-* evaluation of XGB
-```{r}
+```{r evaluation_XGB}
 
 accu_xgb <- mean((label_pred_xgb == label_test_xgb))
 tpr.fpr_xgb <- WeightedROC(prob_pred_xgb, label_test_xgb)
@@ -524,6 +559,18 @@ cat("The accuracy of the XGBoost model:", "is", accu_xgb*100, "%.\n")
 cat("The AUC of the XGBoost model:", "is", auc_xgb, ".\n")
 
 ```
+
+```{r evaluation_rf}
+
+accu_rf <- mean((label_pred_rf == label_test_rf))
+tpr.fpr_xgb <- WeightedROC(prob_pred_rf, label_test_rf)
+auc_xgb <- WeightedAUC(tpr.fpr_rf)
+
+
+cat("The accuracy of the Random Forest model:", "is", accu_rf*100, "%.\n")
+cat("The AUC of the Random Forest model:", "is", auc_rf, ".\n")
+```
+
 
 ### Summarize Running Time
 Prediction performance matters, so does the running times for constructing features and for training the model, especially when the computation resource is limited. 
@@ -549,6 +596,13 @@ cat("Time for constructing testing features=", tm_feature_test[1], "s \n")
 cat("Time for training model=", xgb_train_time[1], "s \n") 
 cat("Time for testing model=", tm_test_xgb[1], "s \n")
 
+```
+
+```{r running_time_rf}
+cat("Time for constructing training features=", tm_feature_train[1], "s \n")
+cat("Time for constructing testing features=", tm_feature_test[1], "s \n")
+cat("Time for training random forest model=", rf_train_time[1], "s \n")
+cat("Time for testing random forest model=", tm_test_rf[1], "s \n")
 ```
 
 ###Reference
