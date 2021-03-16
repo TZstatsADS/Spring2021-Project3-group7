@@ -1,6 +1,6 @@
 ---
 title: "Main"
-author: "Chengliang Tang, Yujie Wang, Diane Lu, Tian Zheng"
+author: "Daizy Lam, Peter Kwauk, Qizhen Yang, Ellen Chen, Daryl Kow"
 output:
   pdf_document: default
   html_notebook: default
@@ -325,6 +325,8 @@ K <- 5
 
 new_params <- cv_xgboost(params, feature_train, label_train_xgb, set_rounds, K)
 
+save(new_params, file="../output/res_cv_xgboost.RData")
+
 ``` 
 
 ```{r cv result df}
@@ -355,6 +357,7 @@ res_cv_gbm <- df_mean_error%>%mutate(sd_error=df_sd_error$sd_error,
                                      sd_auc=df_sd_auc$sd_auc)
 save(res_cv_gbm,file = "../output/res_cv_gbm.RData")
 ```
+
 Visualize cross-validation results. 
 ```{r cv_vis}
 load("../output/res_cv_gbm.RData")
@@ -401,7 +404,7 @@ if(run.cv.svm){
 ```
 
 
-* Choose the "best" parameter value
+* Choose the "best" parameter value for baseline model
 ```{r best_model}
 best_n.trees = as.numeric(res_cv_gbm[which.min(res_cv_gbm$mean_error),1])
 best_shrinkage = as.numeric(res_cv_gbm[which.min(res_cv_gbm$mean_error),2])
@@ -417,8 +420,12 @@ label_train = as.integer(dat_train$label)
 init_mtry <- sqrt(ncol(dat_train))
 
 rf_opt_tree <- param_choice_rf(feature_train = feature_train, label_train =  label_train, mtry = init_mtry, ntree = ntrees)
+
+save(rf_opt_tree, file = "../output/res_oob_rf.RData")
 ```
 
+
+#### Train different models
 * Train the baseline model with the entire training set using the selected model (model parameter) via cross-validation.
 ```{r final_train_baseline}
 # training weights
@@ -462,11 +469,81 @@ save(fit_train_xgb, file="../output/fit_train_xgb.RData")
 * Train the Random Forest model with optimal parameters
 
 ```{r final_train_rf}
+load(file = "../output/res_oob_rf.RData")
 rf_train_time <- system.time(fit_train_randomforest <- rf_train(feature_train = feature_train, label_train = label_train, mtry = rf_opt_tree$mtry, ntree = rf_opt_tree$ntree))
-save(fit_train_rf, file="../output/fit_train_rf.RData")
+save(fit_train_randomforest, file="../output/fit_train_rf.RData")
 ```
 
+* train PCA + LDA
+```{r PCA train}
+
+#PCA for training features
+source("../lib/train_PCA.R")
+
+# make dat_train a numeric data frame
+dat_train.new <- matrix(0, ncol = ncol(dat_train) - 1, nrow = nrow(dat_train))
+for (i in 1:(ncol(dat_train) - 1)) {
+dat_train.new[,i] <- as.numeric(dat_train[[i]])
+}
+dat_train.new <- as.data.frame(dat_train.new)
+
+#PCA for training features
+tm_train_pca <- system.time(fit_train_pca <- train_pca(dat_train.new))
+
+save(fit_train_pca, file="../output/pca_train.RData")
+
+# determine the important principle components
+screeplot(fit_train_pca, type = "l")
+
+# The proportion of variance for first 300 PCs
+sum((fit_train_pca$sdev[1:300])^2) / sum((fit_train_pca$sdev)^2)
+
+```
+Therefore, we can choose the first 300 principle components because they explain most of the total variance, which is around 99.9%.
+
+```{r PCA train}
+# get the features of principle components with emotion index
+dat_train_pca <- data.frame(fit_train_pca$x[,1:300], emotion_idx = dat_train[,6007])
+```
+
+Use trained PCA model to test data
+```{r PCA test}
+source("../lib/test_PCA.R")
+dat_test.new <- dat_test
+colnames(dat_test.new) <- c(colnames(dat_train.new), "emotion_idx")
+
+tm_test_pca <- system.time(dat_test.new <- test_pca(fit_train_pca, dat_test.new))
+
+#features of testing principle components with the emotion index
+dat_test_pca <- data.frame(dat_test.new[,1:300], emotion_idx = dat_test[,6007])
+
+save(dat_train_pca, file="../output/feature_train_pca.RData")
+save(dat_test_pca, file="../output/feature_test_pca.RData")
+```
+
+Apply LDA model
+
+```{r LDA train}
+#load("../output/feature_train_pca.RData")
+
+#train LDA model
+source("../lib/train_LDA.R")
+tm_train_lda <- system.time(fit_train_lda <- train_lda(dat_train_pca))
+save(fit_train_lda, file="../output/LDA_train.RData")
+
+#training accuracy in LDA model
+source("../lib/test_LDA.R")
+pred_train_lda <- test_lda(fit_train_lda, dat_train_pca)
+accu_train_lda <- mean(pred_train_lda == dat_train_pca$emotion_idx)
+
+cat("The trainig accuracy of model LDA", "is", accu_train_lda*100, "%.\n")
+cat("Time for training model LDA = ", tm_train_lda[1], "s \n")
+```
+
+
 ### Step 5: Run test on test images
+
+*Baseline model
 ```{r test gbm}
 tm_test_baseline = NA
 feature_test <- as.matrix(dat_test[, -6007])
@@ -477,6 +554,7 @@ if(run.test){
 }
 ```
 
+*SVM model
 ```{r test svm}
 tm_test = NA
 feature_test <- as.matrix(dat_test[, -6007])
@@ -488,7 +566,7 @@ if(run.test.svm){
 }
 ```
 
-Run test on test images for XGBoost
+*XGBoost
 ```{r test xgboost}
 tm_test_xgb = NA
 feature_test <- as.matrix(dat_test[, -6007])
@@ -500,19 +578,30 @@ if(run.test){
                           prob_pred_xgb <- predict(fit_train_xgb, feature_test, pred.type = 'response')})
 }
 ```
-Run test images for Random Forest
+
+*Random Forest
 ```{r test random forest }
 tm_test_rf = NA
 feature_test <- as.matrix(dat_test[, -6007])
 if(run.test){
-  load(file="../output/fit_train_xgb.RData")
-  tm_test_rf <- system.time({label_pred_rf <- predict(fit_train_rf, feature_test, pred.type = 'class');
-                          prob_pred_rf <- predict(fit_train_rf, feature_test, pred.type = 'prob')})
+  load(file="../output/fit_train_rf.RData")
+  tm_test_rf <- system.time({label_pred_rf <- predict(fit_train_randomforest, feature_test, pred.type = 'class');
+                          prob_pred_rf <- predict(fit_train_randomforest, feature_test, type = 'prob')})
 } 
 
 ```
 
-* evaluation
+*LDA
+```{r}
+source("../lib/test_LDA.R")
+#load("../output/feature_test_pca.RData")
+load(file="../output/LDA_train.RData")
+tm_test_lda <- system.time(pred_lda <- test_lda(fit_train_lda, dat_test_pca))
+
+```
+
+
+### Evaluation
 ```{r baseline}
 ## reweight the test data to represent a balanced label distribution
 label_test <- as.integer(dat_test$label)
@@ -549,7 +638,9 @@ cat("The AUC of model:", model_labels_svm[which.min(res_cv_svm$mean_error)], "is
 ```
 
 ```{r evaluation_XGB}
-
+label_test <- as.integer(dat_test$label)
+label_test_xgb <- label_test
+label_test_xgb[label_test_xgb==2] = 0
 accu_xgb <- mean((label_pred_xgb == label_test_xgb))
 tpr.fpr_xgb <- WeightedROC(prob_pred_xgb, label_test_xgb)
 auc_xgb <- WeightedAUC(tpr.fpr_xgb)
@@ -561,16 +652,22 @@ cat("The AUC of the XGBoost model:", "is", auc_xgb, ".\n")
 ```
 
 ```{r evaluation_rf}
-
-accu_rf <- mean((label_pred_rf == label_test_rf))
-tpr.fpr_xgb <- WeightedROC(prob_pred_rf, label_test_rf)
-auc_xgb <- WeightedAUC(tpr.fpr_rf)
+label_test <- as.integer(dat_test$label)
+accu_rf <- mean(label_pred_rf == label_test)
+tpr.fpr.rf <- WeightedROC(prob_pred_rf[,2], label_test)
+auc_rf <- WeightedAUC(tpr.fpr.rf)
 
 
 cat("The accuracy of the Random Forest model:", "is", accu_rf*100, "%.\n")
 cat("The AUC of the Random Forest model:", "is", auc_rf, ".\n")
 ```
 
+```{r evaluation_PCA+LDA}
+accu_lda <- mean(dat_test_pca$emotion_idx == pred_lda)
+label_lda <- as.numeric(dat_test_pca$emotion_idx)
+tpr.fpr <- WeightedROC(as.numeric(pred_lda), label_lda)
+auc <- WeightedAUC(tpr.fpr)
+```
 
 ### Summarize Running Time
 Prediction performance matters, so does the running times for constructing features and for training the model, especially when the computation resource is limited. 
@@ -605,6 +702,13 @@ cat("Time for training random forest model=", rf_train_time[1], "s \n")
 cat("Time for testing random forest model=", tm_test_rf[1], "s \n")
 ```
 
+
+```{r}
+cat("Time for constructing training features=", tm_feature_train[1], "s \n")
+cat("Time for constructing testing features=", tm_feature_test[1], "s \n")
+cat("Time for training model LDA = ", tm_train_lda[1], "s \n")
+cat("Time for testing model LDA = ",tm_test_lda[1], "s \n")
+```
 ###Reference
 - Du, S., Tao, Y., & Martinez, A. M. (2014). Compound facial expressions of emotion. Proceedings of the National Academy of Sciences, 111(15), E1454-E1462.
 
