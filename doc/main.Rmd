@@ -475,7 +475,7 @@ save(fit_train_randomforest, file="../output/fit_train_rf.RData")
 ```
 
 * train PCA + LDA
-```{r PCA train}
+```{r PCA}
 
 #PCA for training features
 source("../lib/train_PCA.R")
@@ -536,8 +536,8 @@ source("../lib/test_LDA.R")
 pred_train_lda <- test_lda(fit_train_lda, dat_train_pca)
 accu_train_lda <- mean(pred_train_lda == dat_train_pca$emotion_idx)
 
-cat("The trainig accuracy of model LDA", "is", accu_train_lda*100, "%.\n")
-cat("Time for training model LDA = ", tm_train_lda[1], "s \n")
+#cat("The trainig accuracy of model LDA", "is", accu_train_lda*100, "%.\n")
+#cat("Time for training model LDA = ", tm_train_lda[1], "s \n")
 ```
 
 
@@ -665,8 +665,11 @@ cat("The AUC of the Random Forest model:", "is", auc_rf, ".\n")
 ```{r evaluation_PCA+LDA}
 accu_lda <- mean(dat_test_pca$emotion_idx == pred_lda)
 label_lda <- as.numeric(dat_test_pca$emotion_idx)
-tpr.fpr <- WeightedROC(as.numeric(pred_lda), label_lda)
-auc <- WeightedAUC(tpr.fpr)
+tpr.fpr.lda <- WeightedROC(as.numeric(pred_lda), label_lda)
+auc_lda <- WeightedAUC(tpr.fpr.lda)
+
+cat("The accuracy of the PCA+LDA model:", "is", accu_lda*100, "%.\n")
+cat("The AUC of the PCA+LDA model:", "is", auc_lda, ".\n")
 ```
 
 ### Summarize Running Time
@@ -703,9 +706,12 @@ cat("Time for testing random forest model=", tm_test_rf[1], "s \n")
 ```
 
 
-```{r}
+```{r running_time_PCA+LDA}
 cat("Time for constructing training features=", tm_feature_train[1], "s \n")
 cat("Time for constructing testing features=", tm_feature_test[1], "s \n")
+
+cat("Time for training PCA =", tm_train_pca[1], "s \n")
+cat("Time for testing PCA =", tm_test_pca[1], "s \n")
 cat("Time for training model LDA = ", tm_train_lda[1], "s \n")
 cat("Time for testing model LDA = ",tm_test_lda[1], "s \n")
 ```
