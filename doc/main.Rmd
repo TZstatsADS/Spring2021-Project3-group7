@@ -594,7 +594,7 @@ if(run.test){
 *LDA
 ```{r}
 source("../lib/test_LDA.R")
-#load("../output/feature_test_pca.RData")
+load(file = "../output/feature_test_pca.RData")
 load(file="../output/LDA_train.RData")
 tm_test_lda <- system.time(pred_lda <- test_lda(fit_train_lda, dat_test_pca))
 
