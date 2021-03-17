@@ -6,7 +6,7 @@ output:
   html_notebook: default
 ---
 
-In this project, we tested different classification model for facial emotion recognition. Our group tried out six different machine learning algorithms, trained them on the given data set, cross-validated to find the optimized parameters, and provided fair evaluation for all the models. The evaluation process considered the prediction error (and accuracy), the area under the ROC curve (or AUC), and running time (testing and training) to choose the most improved model. In this main file, we only show the results of baseline model(GBM) and the final improved model(XGboost). As for the other models, results are in working_main file.
+In this project, we tested different classification model for facial emotion recognition. Our group tried out six different machine learning algorithms, trained them on the given data set, cross-validated to find the optimized parameters, and provided fair evaluation for all the models. The evaluation process considered the prediction error (and accuracy), the area under the ROC curve (or AUC), and running time (testing and training) to choose the most improved model. In this main file, we only show the results of baseline model(GBM) and the final improved model(XGboost). As for the other models, results are in working_main file (Neural Network is in .ipynb format).
 
 ```{r message=FALSE}
 if(!require("EBImage")){
