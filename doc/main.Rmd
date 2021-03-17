@@ -1,5 +1,5 @@
 ---
-title: "Main"
+title: "Working_Main"
 author: "Daizy Lam, Peter Kwauk, Qizhen Yang, Ellen Chen, Daryl Kow"
 output:
   pdf_document: default
@@ -98,48 +98,34 @@ In this chunk, we have a set of controls for the evaluation experiments.
 + (T/F) process features for test set
 
 ```{r exp_setup}
-run.cv <- FALSE # run cross-validation on the training set
 run.cv.baseline <- FALSE # run cross-validation on the gbm baseline
 sample.reweight <- TRUE # run sample reweighting in model training
 K <- 5  # number of CV folds
 run.feature.train <- TRUE # process features for training set
 run.test <- TRUE # run evaluation on an independent test set
 run.feature.test <- TRUE # process features for test set
-run.cv.svm <- FALSE
-run.test.svm <- TRUE
-
+run.cv.xgboost <- TRUE
 ```
 
 Using cross-validation or independent test set evaluation, we compare the performance of models with different specifications. In this Starter Code, we tune parameter lambda (the amount of shrinkage) for logistic regression with LASSO penalty.
 
 ```{r model_setup}
-lmbd = c(1e-3, 5e-3, 1e-2, 5e-2, 1e-1)
-model_labels = paste("LASSO Penalty with lambda =", lmbd)
 
 #gbm parameters tuning:
 n.trees = c(10,50,100,200)
 shrinkage = c(0.01,0.05,0.1,0.15)
-
-#svm parameters tuning:
-cost = c(0.0000001,0.000001,0.00001,0.0001,0.001,0.01,1)
-model_labels_svm = paste("SVM with cost =", cost)
 
 #xgboost parameters tuning
 params <- list(booster = "gbtree", objective = "binary:logistic", 
                  eta=0.3, gamma=0, max_depth=6, min_child_weight=1, 
                  subsample=1, colsample_bytree=1)
 
-#random forest parameters tuning
-ntrees <- 128 
-#according to a paper by Thais Mayumi Oshiro, Pedro Santoro Perez, and Jos ́e Augusto Baranauska,
-# the AUC gain for increasing number of trees is minimal after 128, 
-# after observing a multitude of their datasets
-
 
 ```
 
 ### Step 2: import data and train-test split 
 ```{r}
+set.seed(2020)
 #train-test split
 info <- read.csv(train_label_path)
 n <- nrow(info)
@@ -226,23 +212,16 @@ Call the train model and test model from library.
 + In this Starter Code, we use logistic regression with LASSO penalty to do classification. 
 
 ```{r loadlib}
-source("../lib/train.R") 
-source("../lib/test.R")
-
 source("../lib/train_gbm.R")
 source("../lib/test_gbm.R")
-
-source("../lib/train_SVM.R") 
-source("../lib/test_SVM.R")
-
 source("../lib/fit_train_xgboost.R")
-source("../lib/fit_train_randomforest.R")
+
 ```
 
 #### Model selection with cross-validation
 * Do model selection by choosing among different values of training model parameters.
 
-
+### Baseline Model
 * Baseline/GBM
 ```{r runcv}
 feature_train = as.matrix(dat_train[, -6007])
@@ -282,52 +261,7 @@ res_cv_gbm <- cv_gbm(features = feature_train, labels = label_train, K,  n.trees
   load("../output/mean_auc_cv.RData")
   load("../output/sd_auc_cv.RData")
     }
-
-if(run.cv){
-  res_cv <- matrix(0, nrow = length(lmbd), ncol = 4)
-  for(i in 1:length(lmbd)){
-    cat("lambda = ", lmbd[i], "\n")
-    res_cv[i,] <- cv.function(features = feature_train, labels = label_train, K, 
-                              l = lmbd[i], reweight = sample.reweight)
-  save(res_cv, file="../output/res_cv.RData")
-  }
-}else{
-  load("../output/res_cv.RData")
-}
 ```
-
-* SVM
-```{r svm}
-if(run.cv.svm){
-  res_cv_svm <- matrix(0, nrow = length(cost), ncol = 4)
-  for(i in 1:length(cost)){
-    cat("cost= ", cost[i], "\n")
-    res_cv_svm[i,] <- svm_cv(features = feature_train, labels = label_train, K, cost=cost[i], reweight = sample.reweight)
-  save(res_cv_svm, file="../output/res_cv_svm.RData")
-  }
-}else{
-  load("../output/res_cv_svm.RData")
-}
-```
-
-
-* XGBoost 
-```{r Parameter Optimization Through Cross Validation for XGBoost}
-
-source("../lib/xgboost_cv.R")
-feature_train = as.matrix(dat_train[, -6007])
-label_train = as.integer(dat_train$label) 
-label_train_xgb <- label_train
-label_train_xgb[label_train_xgb == 2] <- 0
-
-set_rounds  <- 50
-K <- 5
-
-new_params <- cv_xgboost(params, feature_train, label_train_xgb, set_rounds, K)
-
-save(new_params, file="../output/res_cv_xgboost.RData")
-
-``` 
 
 ```{r cv result df}
 library(tidyr)
@@ -381,26 +315,6 @@ if(run.cv.baseline){
   print(p2)
 }
 
-res_cv_svm <- as.data.frame(res_cv_svm) 
-colnames(res_cv_svm) <- c("mean_error", "sd_error", "mean_AUC", "sd_AUC")
-res_cv_svm$k = as.factor(cost)
-run.cv.svm <- TRUE
-if(run.cv.svm){
-  p1 <- res_cv_svm %>% 
-    ggplot(aes(x = as.factor(cost), y = mean_error,
-               ymin = mean_error - sd_error, ymax = mean_error + sd_error)) + 
-    geom_crossbar() +
-    theme(axis.text.x = element_text(angle = 90, hjust = 1))
-  
-  p2 <- res_cv_svm %>% 
-    ggplot(aes(x = as.factor(cost), y = mean_AUC,
-               ymin = mean_AUC - sd_AUC, ymax = mean_AUC + sd_AUC)) + 
-    geom_crossbar() +
-    theme(axis.text.x = element_text(angle = 90, hjust = 1))
-  
-  print(p1)
-  print(p2)
-}
 ```
 
 
@@ -408,26 +322,44 @@ if(run.cv.svm){
 ```{r best_model}
 best_n.trees = as.numeric(res_cv_gbm[which.min(res_cv_gbm$mean_error),1])
 best_shrinkage = as.numeric(res_cv_gbm[which.min(res_cv_gbm$mean_error),2])
-
-best_cost <- cost[which.min(res_cv_svm$mean_error)]
-```
-
-* Choose "best" number of trees and mtry for random forest model
-```{r best_model_rf}
-source("../lib/rf_param_choice.R")
-feature_train = as.matrix(dat_train[, -6007])
-label_train = as.integer(dat_train$label) 
-init_mtry <- sqrt(ncol(dat_train))
-
-rf_opt_tree <- param_choice_rf(feature_train = feature_train, label_train =  label_train, mtry = init_mtry, ntree = ntrees)
-
-save(rf_opt_tree, file = "../output/res_oob_rf.RData")
 ```
 
 
-#### Train different models
+### Improved Model
+
+* XGBoost 
+```{r Parameter Optimization Through Cross Validation for XGBoost}
+
+source("../lib/xgboost_cv.R")
+
+if(run.cv.xgboost){
+  feature_train = as.matrix(dat_train[, -6007])
+  label_train = as.integer(dat_train$label) 
+  label_train_xgb <- label_train
+  label_train_xgb[label_train_xgb == 2] <- 0
+
+  set_rounds  <- 50
+  K <- 5
+
+  new_params <- cv_xgboost(params, feature_train, label_train_xgb, set_rounds, K)
+  
+  save(new_params, file="../output/res_cv_xgboost.RData") 
+ } else{
+  load("../output/res_cv_xgboost.RData")
+    }
+
+
+
+
+``` 
+
+
+
+
+#### Train models
 * Train the baseline model with the entire training set using the selected model (model parameter) via cross-validation.
 ```{r final_train_baseline}
+set.seed(2020)
 # training weights
 weight_train <- rep(NA, length(label_train))
 for (v in unique(label_train)){
@@ -441,22 +373,8 @@ if (sample.reweight){
 save(fit_train_baseline, file="../output/fit_train_baseline.RData")
 ```
 
-* Train the SVM model with the entire training set using the selected model (model parameter) via cross-validation.
-```{r final_train_svm}
-weight_train <- rep(NA, length(label_train))
-for (v in unique(label_train)){
-  weight_train[label_train == v] = 0.5 * length(label_train) / length(label_train[label_train == v])
-}
-if (sample.reweight){
-  tm_train_svm <- system.time(fit_train_svm <-svm_train(feature_train, label_train, w = weight_train, best_cost))
-} else {
-  tm_train_svm <- system.time(fit_train_svm <-svm_train(feature_train, label_train, w = NULL, best_cost))
-}
-save(fit_train_svm, file="../output/fit_train_svm.RData")
-```
 
-
-* Train the XGBoost model with optimal parameters
+* Train the XGBoost model(Improved model) with optimal parameters
 
 ```{r final_train_xgb}
 
@@ -464,80 +382,6 @@ xgb_train_time <- system.time(fit_train_xgb <- xgboost_train(features = feature_
 
 save(fit_train_xgb, file="../output/fit_train_xgb.RData")
 
-```
-
-* Train the Random Forest model with optimal parameters
-
-```{r final_train_rf}
-load(file = "../output/res_oob_rf.RData")
-rf_train_time <- system.time(fit_train_randomforest <- rf_train(feature_train = feature_train, label_train = label_train, mtry = rf_opt_tree$mtry, ntree = rf_opt_tree$ntree))
-save(fit_train_randomforest, file="../output/fit_train_rf.RData")
-```
-
-* train PCA + LDA
-```{r PCA}
-
-#PCA for training features
-source("../lib/train_PCA.R")
-
-# make dat_train a numeric data frame
-dat_train.new <- matrix(0, ncol = ncol(dat_train) - 1, nrow = nrow(dat_train))
-for (i in 1:(ncol(dat_train) - 1)) {
-dat_train.new[,i] <- as.numeric(dat_train[[i]])
-}
-dat_train.new <- as.data.frame(dat_train.new)
-
-#PCA for training features
-tm_train_pca <- system.time(fit_train_pca <- train_pca(dat_train.new))
-
-save(fit_train_pca, file="../output/pca_train.RData")
-
-# determine the important principle components
-screeplot(fit_train_pca, type = "l")
-
-# The proportion of variance for first 300 PCs
-sum((fit_train_pca$sdev[1:300])^2) / sum((fit_train_pca$sdev)^2)
-
-```
-Therefore, we can choose the first 300 principle components because they explain most of the total variance, which is around 99.9%.
-
-```{r PCA train}
-# get the features of principle components with emotion index
-dat_train_pca <- data.frame(fit_train_pca$x[,1:300], emotion_idx = dat_train[,6007])
-```
-
-Use trained PCA model to test data
-```{r PCA test}
-source("../lib/test_PCA.R")
-dat_test.new <- dat_test
-colnames(dat_test.new) <- c(colnames(dat_train.new), "emotion_idx")
-
-tm_test_pca <- system.time(dat_test.new <- test_pca(fit_train_pca, dat_test.new))
-
-#features of testing principle components with the emotion index
-dat_test_pca <- data.frame(dat_test.new[,1:300], emotion_idx = dat_test[,6007])
-
-save(dat_train_pca, file="../output/feature_train_pca.RData")
-save(dat_test_pca, file="../output/feature_test_pca.RData")
-```
-
-Apply LDA model
-
-```{r LDA train}
-#load("../output/feature_train_pca.RData")
-
-#train LDA model
-source("../lib/train_LDA.R")
-tm_train_lda <- system.time(fit_train_lda <- train_lda(dat_train_pca))
-save(fit_train_lda, file="../output/LDA_train.RData")
-
-#training accuracy in LDA model
-source("../lib/test_LDA.R")
-pred_train_lda <- test_lda(fit_train_lda, dat_train_pca)
-accu_train_lda <- mean(pred_train_lda == dat_train_pca$emotion_idx)
-
-#cat("The trainig accuracy of model LDA", "is", accu_train_lda*100, "%.\n")
-#cat("Time for training model LDA = ", tm_train_lda[1], "s \n")
 ```
 
 
@@ -554,19 +398,8 @@ if(run.test){
 }
 ```
 
-*SVM model
-```{r test svm}
-tm_test = NA
-feature_test <- as.matrix(dat_test[, -6007])
-if(run.test.svm){
-  load(file="../output/fit_train_svm.RData")
-  tm_test_svm <- system.time({
-    label_pred_svm <- as.integer(svm_test(fit_train_svm, feature_test, pred.type = 'class')); 
-    prob_pred_svm <- svm_test(fit_train_svm, feature_test, pred.type = 'response')})
-}
-```
 
-*XGBoost
+*XGBoost (Improved model)
 ```{r test xgboost}
 tm_test_xgb = NA
 feature_test <- as.matrix(dat_test[, -6007])
@@ -579,29 +412,9 @@ if(run.test){
 }
 ```
 
-*Random Forest
-```{r test random forest }
-tm_test_rf = NA
-feature_test <- as.matrix(dat_test[, -6007])
-if(run.test){
-  load(file="../output/fit_train_rf.RData")
-  tm_test_rf <- system.time({label_pred_rf <- predict(fit_train_randomforest, feature_test, pred.type = 'class');
-                          prob_pred_rf <- predict(fit_train_randomforest, feature_test, type = 'prob')})
-} 
-
-```
-
-*LDA
-```{r}
-source("../lib/test_LDA.R")
-load(file = "../output/feature_test_pca.RData")
-load(file="../output/LDA_train.RData")
-tm_test_lda <- system.time(pred_lda <- test_lda(fit_train_lda, dat_test_pca))
-
-```
-
 
 ### Evaluation
+*Baseline Model
 ```{r baseline}
 ## reweight the test data to represent a balanced label distribution
 label_test <- as.integer(dat_test$label)
@@ -621,21 +434,7 @@ cat("The AUC of model GBM: with n.trees=", best_n.trees,"and shrinkage =", best_
 
 ```
 
-```{r evalutation_SVM}
-label_test <- as.integer(dat_test$label)
-weight_test <- rep(NA, length(label_test))
-for (v in unique(label_test)){
-  weight_test[label_test == v] = 0.5 * length(label_test) / length(label_test[label_test == v])
-}
-
-accu_svm <- mean(label_pred_svm == label_test)
-tpr.fpr.svm <- WeightedROC(prob_pred_svm, label_test, weight_test)
-auc_svm <- WeightedAUC(tpr.fpr.svm)
-cat("The accuracy of model:", model_labels_svm[which.min(res_cv_svm$mean_error)], "is", accu_svm*100, "%.\n")
-cat("The AUC of model:", model_labels_svm[which.min(res_cv_svm$mean_error)], "is", auc_svm, ".\n")
-
-
-```
+*Improved Model
 
 ```{r evaluation_XGB}
 label_test <- as.integer(dat_test$label)
@@ -651,29 +450,11 @@ cat("The AUC of the XGBoost model:", "is", auc_xgb, ".\n")
 
 ```
 
-```{r evaluation_rf}
-label_test <- as.integer(dat_test$label)
-accu_rf <- mean(label_pred_rf == label_test)
-tpr.fpr.rf <- WeightedROC(prob_pred_rf[,2], label_test)
-auc_rf <- WeightedAUC(tpr.fpr.rf)
-
-
-cat("The accuracy of the Random Forest model:", "is", accu_rf*100, "%.\n")
-cat("The AUC of the Random Forest model:", "is", auc_rf, ".\n")
-```
-
-```{r evaluation_PCA+LDA}
-accu_lda <- mean(dat_test_pca$emotion_idx == pred_lda)
-label_lda <- as.numeric(dat_test_pca$emotion_idx)
-tpr.fpr.lda <- WeightedROC(as.numeric(pred_lda), label_lda)
-auc_lda <- WeightedAUC(tpr.fpr.lda)
-
-cat("The accuracy of the PCA+LDA model:", "is", accu_lda*100, "%.\n")
-cat("The AUC of the PCA+LDA model:", "is", auc_lda, ".\n")
-```
 
 ### Summarize Running Time
 Prediction performance matters, so does the running times for constructing features and for training the model, especially when the computation resource is limited. 
+
+*Baseline Model
 ```{r running_time_baseline}
 cat("Time for constructing training features=", tm_feature_train[1], "s \n")
 cat("Time for constructing testing features=", tm_feature_test[1], "s \n")
@@ -682,14 +463,7 @@ cat("Time for testing model=", tm_test_baseline[1], "s \n")
 ```
 
 
-```{r running_time_SVM}
-cat("Time for constructing training features=", tm_feature_train[1], "s \n")
-cat("Time for constructing testing features=", tm_feature_test[1], "s \n")
-cat("Time for training model=", tm_train_svm[1], "s \n") 
-cat("Time for testing model=", tm_test_svm[1], "s \n")
-```
-
-
+* Improved Model
 ```{r running_time_XGB}
 cat("Time for constructing training features=", tm_feature_train[1], "s \n")
 cat("Time for constructing testing features=", tm_feature_test[1], "s \n")
@@ -698,23 +472,7 @@ cat("Time for testing model=", tm_test_xgb[1], "s \n")
 
 ```
 
-```{r running_time_rf}
-cat("Time for constructing training features=", tm_feature_train[1], "s \n")
-cat("Time for constructing testing features=", tm_feature_test[1], "s \n")
-cat("Time for training random forest model=", rf_train_time[1], "s \n")
-cat("Time for testing random forest model=", tm_test_rf[1], "s \n")
-```
 
-
-```{r running_time_PCA+LDA}
-cat("Time for constructing training features=", tm_feature_train[1], "s \n")
-cat("Time for constructing testing features=", tm_feature_test[1], "s \n")
-
-cat("Time for training PCA =", tm_train_pca[1], "s \n")
-cat("Time for testing PCA =", tm_test_pca[1], "s \n")
-cat("Time for training model LDA = ", tm_train_lda[1], "s \n")
-cat("Time for testing model LDA = ",tm_test_lda[1], "s \n")
-```
 ###Reference
 - Du, S., Tao, Y., & Martinez, A. M. (2014). Compound facial expressions of emotion. Proceedings of the National Academy of Sciences, 111(15), E1454-E1462.
 
