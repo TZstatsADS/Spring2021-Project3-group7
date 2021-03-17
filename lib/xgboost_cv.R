@@ -8,5 +8,5 @@ cv_xgboost <- function(init_params, features,labels,  rounds = 50, K = 5){
                   print_every_n = 10, 
                   early_stop_round = 20, maximize = F,
                   metrics = "error")
-  return(xgbcv$params[c(1, 3:11)])
+  return(xgbcv)
 }
