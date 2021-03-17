@@ -104,7 +104,7 @@ K <- 5  # number of CV folds
 run.feature.train <- TRUE # process features for training set
 run.test <- TRUE # run evaluation on an independent test set
 run.feature.test <- TRUE # process features for test set
-run.cv.xgboost <- TRUE
+run.cv.xgboost <- FALSE
 ```
 
 Using cross-validation or independent test set evaluation, we compare the performance of models with different specifications. In this Starter Code, we tune parameter lambda (the amount of shrinkage) for logistic regression with LASSO penalty.
@@ -359,7 +359,6 @@ if(run.cv.xgboost){
 #### Train models
 * Train the baseline model with the entire training set using the selected model (model parameter) via cross-validation.
 ```{r final_train_baseline}
-set.seed(2020)
 # training weights
 weight_train <- rep(NA, length(label_train))
 for (v in unique(label_train)){
@@ -378,11 +377,18 @@ save(fit_train_baseline, file="../output/fit_train_baseline.RData")
 
 ```{r final_train_xgb}
 
-
+load("../output/res_cv_xgboost.RData")
 weight_train <- rep(NA, length(label_train))
 for (v in unique(label_train)){
   weight_train[label_train == v] = 0.5 * length(label_train) / length(label_train[label_train == v])
 }
+
+feature_train = as.matrix(dat_train[, -6007])
+label_train = as.integer(dat_train$label) 
+label_train_xgb <- label_train
+label_train_xgb[label_train_xgb == 2] <- 0
+set_rounds  <- 50 
+
 if (sample.reweight){
  xgb_train_time <- system.time(fit_train_xgb <- xgboost_train(features = feature_train, labels = label_train_xgb, params = new_params, rounds =  set_rounds, spec_weights =  weight_train))
 } else {
@@ -447,8 +453,14 @@ cat("The AUC of model GBM: with n.trees=", best_n.trees,"and shrinkage =", best_
 label_test <- as.integer(dat_test$label)
 label_test_xgb <- label_test
 label_test_xgb[label_test_xgb==2] = 0
+
+weight_test <- rep(NA, length(label_test_xgb))
+for (v in unique(label_test_xgb)){
+  weight_test[label_test_xgb == v] = 0.5 * length(label_test_xgb) / length(label_test_xgb[label_test_xgb == v])
+}
+
 accu_xgb <- mean((label_pred_xgb == label_test_xgb))
-tpr.fpr_xgb <- WeightedROC(prob_pred_xgb, label_test_xgb)
+tpr.fpr_xgb <- WeightedROC(prob_pred_xgb, label_test_xgb, weight_test)
 auc_xgb <- WeightedAUC(tpr.fpr_xgb)
 
 
