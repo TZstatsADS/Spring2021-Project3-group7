@@ -6,9 +6,7 @@ output:
   html_notebook: default
 ---
 
-In your final repo, there should be an R markdown file that organizes **all computational steps** for evaluating your proposed Facial Expression Recognition framework. 
-
-This file is currently a template for running evaluation experiments. You should update it according to your codes but following precisely the same structure. 
+In this project, we tested different classification model for facial emotion recognition. Our group tried out six different machine learning algorithms, trained them on the given data set, cross-validated to find the optimized parameters, and provided fair evaluation for all the models. The evaluation process considered the prediction error (and accuracy), the area under the ROC curve (or AUC), and running time (testing and training) to choose the most improved model.
 
 ```{r message=FALSE}
 if(!require("EBImage")){
@@ -110,11 +108,9 @@ run.test.svm <- TRUE
 
 ```
 
-Using cross-validation or independent test set evaluation, we compare the performance of models with different specifications. In this Starter Code, we tune parameter lambda (the amount of shrinkage) for logistic regression with LASSO penalty.
+Using cross-validation or independent test set evaluation, we compare the performance of models with different specifications.
 
 ```{r model_setup}
-lmbd = c(1e-3, 5e-3, 1e-2, 5e-2, 1e-1)
-model_labels = paste("LASSO Penalty with lambda =", lmbd)
 
 #gbm parameters tuning:
 n.trees = c(10,50,100,200)
@@ -223,7 +219,6 @@ Call the train model and test model from library.
   + Input: an R object that contains a trained classifier.
   + Output: training model specification
 
-+ In this Starter Code, we use logistic regression with LASSO penalty to do classification. 
 
 ```{r loadlib}
 source("../lib/train.R") 
@@ -243,7 +238,7 @@ source("../lib/fit_train_randomforest.R")
 * Do model selection by choosing among different values of training model parameters.
 
 **Baseline Model**
-* Baseline/GBM
++ Baseline/GBM
 ```{r runcv}
 feature_train = as.matrix(dat_train[, -6007])
 label_train = as.integer(dat_train$label) 
@@ -296,39 +291,6 @@ if(run.cv){
 }
 ```
 
-* SVM
-```{r svm}
-if(run.cv.svm){
-  res_cv_svm <- matrix(0, nrow = length(cost), ncol = 4)
-  for(i in 1:length(cost)){
-    cat("cost= ", cost[i], "\n")
-    res_cv_svm[i,] <- svm_cv(features = feature_train, labels = label_train, K, cost=cost[i], reweight = sample.reweight)
-  save(res_cv_svm, file="../output/res_cv_svm.RData")
-  }
-}else{
-  load("../output/res_cv_svm.RData")
-}
-```
-
-**Improved Model**
-* XGBoost 
-```{r Parameter Optimization Through Cross Validation for XGBoost}
-
-source("../lib/xgboost_cv.R")
-feature_train = as.matrix(dat_train[, -6007])
-label_train = as.integer(dat_train$label) 
-label_train_xgb <- label_train
-label_train_xgb[label_train_xgb == 2] <- 0
-
-set_rounds  <- 50
-K <- 5
-
-new_params <- cv_xgboost(params, feature_train, label_train_xgb, set_rounds, K)
-
-save(new_params, file="../output/res_cv_xgboost.RData")
-
-``` 
-
 ```{r cv result df}
 library(tidyr)
 
@@ -357,6 +319,39 @@ res_cv_gbm <- df_mean_error%>%mutate(sd_error=df_sd_error$sd_error,
                                      sd_auc=df_sd_auc$sd_auc)
 save(res_cv_gbm,file = "../output/res_cv_gbm.RData")
 ```
+
++ SVM
+```{r svm}
+if(run.cv.svm){
+  res_cv_svm <- matrix(0, nrow = length(cost), ncol = 4)
+  for(i in 1:length(cost)){
+    cat("cost= ", cost[i], "\n")
+    res_cv_svm[i,] <- svm_cv(features = feature_train, labels = label_train, K, cost=cost[i], reweight = sample.reweight)
+  save(res_cv_svm, file="../output/res_cv_svm.RData")
+  }
+}else{
+  load("../output/res_cv_svm.RData")
+}
+```
+
+**Improved Model**
++ XGBoost 
+```{r Parameter Optimization Through Cross Validation for XGBoost}
+
+source("../lib/xgboost_cv.R")
+feature_train = as.matrix(dat_train[, -6007])
+label_train = as.integer(dat_train$label) 
+label_train_xgb <- label_train
+label_train_xgb[label_train_xgb == 2] <- 0
+
+set_rounds  <- 50
+K <- 5
+
+new_params <- cv_xgboost(params, feature_train, label_train_xgb, set_rounds, K)
+
+save(new_params, file="../output/res_cv_xgboost.RData")
+
+``` 
 
 Visualize cross-validation results. 
 ```{r cv_vis}
@@ -426,7 +421,7 @@ save(rf_opt_tree, file = "../output/res_oob_rf.RData")
 
 
 #### Train different models
-* Train the baseline model with the entire training set using the selected model (model parameter) via cross-validation.
++ Train the baseline model with the entire training set using the selected model (model parameter) via cross-validation.
 ```{r final_train_baseline}
 # training weights
 weight_train <- rep(NA, length(label_train))
@@ -441,7 +436,7 @@ if (sample.reweight){
 save(fit_train_baseline, file="../output/fit_train_baseline.RData")
 ```
 
-* Train the SVM model with the entire training set using the selected model (model parameter) via cross-validation.
++ Train the SVM model with the entire training set using the selected model (model parameter) via cross-validation.
 ```{r final_train_svm}
 weight_train <- rep(NA, length(label_train))
 for (v in unique(label_train)){
@@ -456,7 +451,7 @@ save(fit_train_svm, file="../output/fit_train_svm.RData")
 ```
 
 
-* Train the XGBoost model with optimal parameters
++ Train the XGBoost model with optimal parameters
 
 ```{r final_train_xgb}
 
@@ -466,7 +461,7 @@ save(fit_train_xgb, file="../output/fit_train_xgb.RData")
 
 ```
 
-* Train the Random Forest model with optimal parameters
++ Train the Random Forest model with optimal parameters
 
 ```{r final_train_rf}
 load(file = "../output/res_oob_rf.RData")
@@ -474,7 +469,7 @@ rf_train_time <- system.time(fit_train_randomforest <- rf_train(feature_train = 
 save(fit_train_randomforest, file="../output/fit_train_rf.RData")
 ```
 
-* train PCA + LDA
++ train PCA + LDA
 ```{r PCA}
 
 #PCA for training features
@@ -536,14 +531,14 @@ source("../lib/test_LDA.R")
 pred_train_lda <- test_lda(fit_train_lda, dat_train_pca)
 accu_train_lda <- mean(pred_train_lda == dat_train_pca$emotion_idx)
 
-#cat("The trainig accuracy of model LDA", "is", accu_train_lda*100, "%.\n")
-#cat("Time for training model LDA = ", tm_train_lda[1], "s \n")
+cat("The trainig accuracy of model LDA", "is", accu_train_lda*100, "%.\n")
+cat("Time for training model LDA = ", tm_train_lda[1], "s \n")
 ```
 
 
 ### Step 5: Run test on test images
 
-*Baseline model
++Baseline model
 ```{r test gbm}
 tm_test_baseline = NA
 feature_test <- as.matrix(dat_test[, -6007])
@@ -554,7 +549,7 @@ if(run.test){
 }
 ```
 
-*SVM model
++SVM model
 ```{r test svm}
 tm_test = NA
 feature_test <- as.matrix(dat_test[, -6007])
@@ -566,7 +561,7 @@ if(run.test.svm){
 }
 ```
 
-*XGBoost
++XGBoost
 ```{r test xgboost}
 tm_test_xgb = NA
 feature_test <- as.matrix(dat_test[, -6007])
@@ -579,7 +574,7 @@ if(run.test){
 }
 ```
 
-*Random Forest
++Random Forest
 ```{r test random forest }
 tm_test_rf = NA
 feature_test <- as.matrix(dat_test[, -6007])
@@ -591,7 +586,7 @@ if(run.test){
 
 ```
 
-*LDA
++LDA
 ```{r}
 source("../lib/test_LDA.R")
 load(file = "../output/feature_test_pca.RData")
@@ -602,6 +597,7 @@ tm_test_lda <- system.time(pred_lda <- test_lda(fit_train_lda, dat_test_pca))
 
 
 ### Evaluation
+*Baseline Model
 ```{r baseline}
 ## reweight the test data to represent a balanced label distribution
 label_test <- as.integer(dat_test$label)
@@ -621,6 +617,8 @@ cat("The AUC of model GBM: with n.trees=", best_n.trees,"and shrinkage =", best_
 
 ```
 
+
+*SVM
 ```{r evalutation_SVM}
 label_test <- as.integer(dat_test$label)
 weight_test <- rep(NA, length(label_test))
@@ -637,6 +635,7 @@ cat("The AUC of model:", model_labels_svm[which.min(res_cv_svm$mean_error)], "is
 
 ```
 
+*XGBoost
 ```{r evaluation_XGB}
 label_test <- as.integer(dat_test$label)
 label_test_xgb <- label_test
@@ -651,6 +650,7 @@ cat("The AUC of the XGBoost model:", "is", auc_xgb, ".\n")
 
 ```
 
+*Random Forest
 ```{r evaluation_rf}
 label_test <- as.integer(dat_test$label)
 accu_rf <- mean(label_pred_rf == label_test)
@@ -662,6 +662,7 @@ cat("The accuracy of the Random Forest model:", "is", accu_rf*100, "%.\n")
 cat("The AUC of the Random Forest model:", "is", auc_rf, ".\n")
 ```
 
+*LDA
 ```{r evaluation_PCA+LDA}
 accu_lda <- mean(dat_test_pca$emotion_idx == pred_lda)
 label_lda <- as.numeric(dat_test_pca$emotion_idx)
@@ -674,6 +675,8 @@ cat("The AUC of the PCA+LDA model:", "is", auc_lda, ".\n")
 
 ### Summarize Running Time
 Prediction performance matters, so does the running times for constructing features and for training the model, especially when the computation resource is limited. 
+
+*Baseline Model
 ```{r running_time_baseline}
 cat("Time for constructing training features=", tm_feature_train[1], "s \n")
 cat("Time for constructing testing features=", tm_feature_test[1], "s \n")
@@ -681,7 +684,7 @@ cat("Time for training model=", tm_train_baseline[1], "s \n")
 cat("Time for testing model=", tm_test_baseline[1], "s \n")
 ```
 
-
+*SVM
 ```{r running_time_SVM}
 cat("Time for constructing training features=", tm_feature_train[1], "s \n")
 cat("Time for constructing testing features=", tm_feature_test[1], "s \n")
@@ -689,7 +692,7 @@ cat("Time for training model=", tm_train_svm[1], "s \n")
 cat("Time for testing model=", tm_test_svm[1], "s \n")
 ```
 
-
+*XGBoost
 ```{r running_time_XGB}
 cat("Time for constructing training features=", tm_feature_train[1], "s \n")
 cat("Time for constructing testing features=", tm_feature_test[1], "s \n")
@@ -698,6 +701,7 @@ cat("Time for testing model=", tm_test_xgb[1], "s \n")
 
 ```
 
+*Random Forest
 ```{r running_time_rf}
 cat("Time for constructing training features=", tm_feature_train[1], "s \n")
 cat("Time for constructing testing features=", tm_feature_test[1], "s \n")
@@ -705,7 +709,7 @@ cat("Time for training random forest model=", rf_train_time[1], "s \n")
 cat("Time for testing random forest model=", tm_test_rf[1], "s \n")
 ```
 
-
+* PCA+LDA
 ```{r running_time_PCA+LDA}
 cat("Time for constructing training features=", tm_feature_train[1], "s \n")
 cat("Time for constructing testing features=", tm_feature_test[1], "s \n")
