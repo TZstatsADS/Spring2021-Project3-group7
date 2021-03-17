@@ -235,7 +235,8 @@ if(run.test){
 *XGBoost (Improved model)
 ```{r test xgboost}
 tm_test_xgb = NA
-feature_test <- as.matrix(dat_test[, -6007])
+feature_test <- as.matrix(dat_test[, -6006])
+colnames(feature_test) <- NULL
 if(run.test){
   load(file="../output/fit_train_xgb.RData")
   tm_test_xgb <- system.time({label_pred_xgb <- predict(fit_train_xgb, feature_test, pred.type = 'class');
