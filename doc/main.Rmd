@@ -373,9 +373,17 @@ for (v in unique(label_train)){
   weight_train[label_train == v] = 0.5 * length(label_train) / length(label_train[label_train == v])
 }
 if (sample.reweight){
-  tm_train_baseline <- system.time(fit_train_baseline <- train_gbm(feature_train, label_train, w = weight_train,best_n.trees, best_shrinkage))
+  tm_train_baseline <- system.time(fit_train_baseline <- train_gbm(feature_train, 
+                                    label_train, 
+                                    w = weight_train,
+                                    best_n.trees, 
+                                    best_shrinkage))
 } else {
-  tm_train_baseline <- system.time(fit_train_baseline <- train_gbm(feature_train, label_train, w = NULL, best_n.trees, best_shrinkage))
+  tm_train_baseline <- system.time(fit_train_baseline <- train_gbm(feature_train, 
+                                    label_train, 
+                                    w = NULL, 
+                                    best_n.trees, 
+                                    best_shrinkage))
 }
 save(fit_train_baseline, file="../output/fit_train_baseline.RData")
 ```
@@ -398,7 +406,11 @@ label_train_xgb[label_train_xgb == 2] <- 0
 set_rounds  <- 50 
 
 if (sample.reweight){
- xgb_train_time <- system.time(fit_train_xgb <- xgboost_train(features = feature_train, labels = label_train_xgb, params = new_params, rounds =  set_rounds, spec_weights =  weight_train))
+ xgb_train_time <- system.time(fit_train_xgb <- xgboost_train(features = feature_train,
+                                                              labels = label_train_xgb,
+                                                              params = new_params,
+                                                              rounds =  set_rounds,
+                                                      spec_weights = weight_train))
 } else {
   xgb_train_time <- system.time(fit_train_xgb <- xgboost_train(features = feature_train, labels = label_train_xgb, params = new_params, rounds =  set_rounds, spec_weights =  NULL))
 }
