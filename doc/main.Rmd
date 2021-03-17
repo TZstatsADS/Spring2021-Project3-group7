@@ -1,14 +1,12 @@
 ---
-title: "Working_Main"
+title: "Main"
 author: "Daizy Lam, Peter Kwauk, Qizhen Yang, Ellen Chen, Daryl Kow"
 output:
   pdf_document: default
   html_notebook: default
 ---
 
-In your final repo, there should be an R markdown file that organizes **all computational steps** for evaluating your proposed Facial Expression Recognition framework. 
-
-This file is currently a template for running evaluation experiments. You should update it according to your codes but following precisely the same structure. 
+In this project, we tested different classification model for facial emotion recognition. Our group tried out six different machine learning algorithms, trained them on the given data set, cross-validated to find the optimized parameters, and provided fair evaluation for all the models. The evaluation process considered the prediction error (and accuracy), the area under the ROC curve (or AUC), and running time (testing and training) to choose the most improved model. In this main file, we only show the results of baseline model(GBM) and the final improved model(XGboost). As for the other models, results are in working_main file.
 
 ```{r message=FALSE}
 if(!require("EBImage")){
@@ -107,7 +105,7 @@ run.feature.test <- TRUE # process features for test set
 run.cv.xgboost <- FALSE
 ```
 
-Using cross-validation or independent test set evaluation, we compare the performance of models with different specifications. In this Starter Code, we tune parameter lambda (the amount of shrinkage) for logistic regression with LASSO penalty.
+Using cross-validation or independent test set evaluation, we compare the performance of models with different specifications. 
 
 ```{r model_setup}
 
@@ -208,8 +206,6 @@ Call the train model and test model from library.
   + Input: the fitted classification model using training data and processed features from testing images 
   + Input: an R object that contains a trained classifier.
   + Output: training model specification
-
-+ In this Starter Code, we use logistic regression with LASSO penalty to do classification. 
 
 ```{r loadlib}
 source("../lib/train_gbm.R")
