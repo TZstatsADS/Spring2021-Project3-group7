@@ -128,7 +128,7 @@ set.seed(2020)
 info <- read.csv(test_label_path)
 n <- nrow(info)
 #train_idx <- sample(info$Index, n_train, replace = F)
-test_idx <- 1:n
+test_idx <- seq(1, n, by=1)
 ```
 
 If you choose to extract features from images, such as using Gabor filter, R memory will exhaust all images are read together. The solution is to repeat reading a smaller batch(e.g 100) and process them. 
@@ -152,7 +152,7 @@ readMat.matrix <- function(index){
 
 #load fiducial points
 fiducial_pt_list <- lapply(1:n_files, readMat.matrix)
-save(fiducial_pt_list, file="../output/fiducial_pt_list.RData")
+save(fiducial_pt_list, file="../output/fiducial_pt_list_test.RData")
 ```
 
 ### Step 3: construct features and responses
@@ -219,16 +219,33 @@ source("../lib/test_gbm.R")
 ### Run test on test images
 
 *Baseline model
-```{r test gbm}
-tm_test_baseline = NA
-feature_test <- as.matrix(dat_test[, -6007])
-if(run.test){
-  load(file="../output/fit_train_baseline.RData")
-  tm_test_baseline <- system.time({label_pred_baseline <- as.integer(test_gbm(fit_train_baseline,feature_test,best_n.trees, best_shrinkage, pred.type = 'link')); 
-                          prob_pred_baseline <- test_gbm(fit_train_baseline, feature_test,best_n.trees, best_shrinkage, pred.type = 'response')})
-}
+```{r best_model}
+load("../output/res_cv_gbm.RData")
+best_n.trees = as.numeric(res_cv_gbm[which.min(res_cv_gbm$mean_error),1])
+best_shrinkage = as.numeric(res_cv_gbm[which.min(res_cv_gbm$mean_error),2])
 ```
 
+```{r test gbm}
+
+source("../lib/test_gbm.R")
+tm_test_baseline = NA
+feature_test <- as.matrix(dat_test[, -6006])
+
+if(run.test){
+  load(file="../output/fit_train_baseline.RData")
+  tm_test_baseline <- system.time({
+    label_pred_baseline <- as.integer(test_gbm(fit_train_baseline,feature_test, best_n.trees, best_shrinkage, pred.type = 'link'));
+  prob_pred_baseline <- test_gbm(fit_train_baseline, feature_test,best_n.trees, best_shrinkage, pred.type = 'response')})
+}
+
+```
+
+*Prediction by baseline
+```{r}
+
+predict_baseline <- as.data.frame(label_pred_baseline)
+#write.csv(baseline, "label.csv", row.names = F)
+```
 
 *XGBoost (Improved model)
 ```{r test xgboost}
@@ -244,6 +261,10 @@ if(run.test){
 }
 ```
 
+*Prediction by Improved model
+```{r}
+predict_xgb <- as.data.frame(label_pred_xgb)
+```
 
 ### Evaluation
 *Baseline Model

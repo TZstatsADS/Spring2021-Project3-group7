@@ -105,7 +105,7 @@ run.test <- TRUE # run evaluation on an independent test set
 run.feature.test <- TRUE # process features for test set
 run.cv.svm <- FALSE
 run.test.svm <- TRUE
-
+run.cv.xgboost <- FALSE
 ```
 
 Using cross-validation or independent test set evaluation, we compare the performance of models with different specifications.
