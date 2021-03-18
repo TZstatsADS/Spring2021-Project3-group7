@@ -80,10 +80,10 @@ set.seed(2020)
 
 Provide directories for training images. Training images and Training fiducial points will be in different subfolders. 
 ```{r}
-train_dir <- "../data/train_set/" # This will be modified for different data sets.
-train_image_dir <- paste(train_dir, "images/", sep="")
-train_pt_dir <- paste(train_dir,  "points/", sep="")
-train_label_path <- paste(train_dir, "label.csv", sep="") 
+test_dir <- "../data/test_set_predict/" # This will be modified for different data sets.
+test_image_dir <- paste(test_dir, "images/", sep="")
+test_pt_dir <- paste(test_dir,  "points/", sep="")
+test_label_path <- paste(test_dir, "label_prediction.csv", sep="") 
 ```
 
 ### Step 1: set up controls for evaluation experiments.
@@ -127,19 +127,19 @@ params <- list(booster = "gbtree", objective = "binary:logistic",
 ```{r}
 set.seed(2020)
 #train-test split
-info <- read.csv(train_label_path)
+info <- read.csv(test_label_path)
 n <- nrow(info)
 #train_idx <- sample(info$Index, n_train, replace = F)
-test_idx <- range(n)
+test_idx <- 1:n
 ```
 
 If you choose to extract features from images, such as using Gabor filter, R memory will exhaust all images are read together. The solution is to repeat reading a smaller batch(e.g 100) and process them. 
 ```{r}
-n_files <- length(list.files(train_image_dir))
+n_files <- length(list.files(test_image_dir))
 
 image_list <- list()
 for(i in 1:100){
-   image_list[[i]] <- readImage(paste0(train_image_dir, sprintf("%04d", i), ".jpg"))
+   image_list[[i]] <- readImage(paste0(test_image_dir, sprintf("%04d", i), ".jpg"))
 }
 ```
 
@@ -149,7 +149,7 @@ Fiducial points are stored in matlab format. In this step, we read them and stor
 #input: index
 #output: matrix of fiducial points corresponding to the index
 readMat.matrix <- function(index){
-     return(round(readMat(paste0(train_pt_dir, sprintf("%04d", index), ".mat"))[[1]],0))
+     return(round(readMat(paste0(test_pt_dir, sprintf("%04d", index), ".mat"))[[1]],0))
 }
 
 #load fiducial points
@@ -241,7 +241,7 @@ if(run.test){
   load(file="../output/fit_train_xgb.RData")
   tm_test_xgb <- system.time({label_pred_xgb <- predict(fit_train_xgb, feature_test, pred.type = 'class');
                           label_pred_xgb[label_pred_xgb >= 0.5] <- 1;
-                          label_pred_xgb[label_pred_xgb < 0.5] <-  0;
+                          label_pred_xgb[label_pred_xgb < 0.5] <-  2;
                           prob_pred_xgb <- predict(fit_train_xgb, feature_test, pred.type = 'response')})
 }
 ```
