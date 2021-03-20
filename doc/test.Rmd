@@ -56,6 +56,9 @@ if(!require("xgboost")){
 if(!require("randomForest")){
   install.packages("randomForest")
 }
+if(!require("gbm")){
+  install.packages("gbm")
+}
 
 library(R.matlab)
 library(readxl)
@@ -68,6 +71,7 @@ library(WeightedROC)
 library(e1071)
 library(xgboost)
 library(randomForest)
+library(gbm)
 ```
 
 ### Step 0 set work directories
@@ -235,6 +239,7 @@ if(run.test){
   load(file="../output/fit_train_baseline.RData")
   tm_test_baseline <- system.time({
     label_pred_baseline <- as.integer(test_gbm(fit_train_baseline,feature_test, best_n.trees, best_shrinkage, pred.type = 'link'));
+    label_pred_baseline[label_pred_baseline == 2] <- 0;
   prob_pred_baseline <- test_gbm(fit_train_baseline, feature_test,best_n.trees, best_shrinkage, pred.type = 'response')})
 }
 
@@ -256,7 +261,7 @@ if(run.test){
   load(file="../output/fit_train_xgb.RData")
   tm_test_xgb <- system.time({label_pred_xgb <- predict(fit_train_xgb, feature_test, pred.type = 'class');
                           label_pred_xgb[label_pred_xgb >= 0.5] <- 1;
-                          label_pred_xgb[label_pred_xgb < 0.5] <-  2;
+                          label_pred_xgb[label_pred_xgb < 0.5] <-  0;
                           prob_pred_xgb <- predict(fit_train_xgb, feature_test, pred.type = 'response')})
 }
 ```
@@ -265,6 +270,14 @@ if(run.test){
 ```{r}
 predict_xgb <- as.data.frame(label_pred_xgb)
 ```
+
+*Combining the datasets into one and writing the .csv
+```{r}
+output_csv <- cbind(predict_baseline, predict_xgb)
+names(output_csv) <- c("baseline model", "xgboost (improved) model")
+write.csv(output_csv, "test_prediction.csv", row.names = F)
+```
+
 
 ### Evaluation
 *Baseline Model
