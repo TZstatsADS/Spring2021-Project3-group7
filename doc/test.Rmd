@@ -274,8 +274,9 @@ predict_xgb <- as.data.frame(label_pred_xgb)
 
 *Combining the datasets into one and writing the .csv
 ```{r}
-output_csv <- cbind(predict_baseline, predict_xgb)
-names(output_csv) <- c("baseline model", "xgboost (improved) model")
+index <- as.data.frame(1:2000)
+output_csv <- cbind(index, predict_baseline, predict_xgb)
+names(output_csv) <- c("index", "baseline model", "xgboost (improved) model")
 write.csv(output_csv, "test_prediction.csv", row.names = F)
 ```
 
